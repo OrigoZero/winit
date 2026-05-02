@@ -94,6 +94,8 @@ use runner::{EventLoopRunner, EventLoopRunnerShared};
 use super::window::set_skip_taskbar;
 use super::SelectedCursor;
 
+const PEEKED_MESSAGE_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
+
 /// some backends like macos uses an uninhabited `Never` type,
 /// on windows, `UserEvent`s are also dispatched through the
 /// WNDPROC callback, and due to the re-entrant nature of the
@@ -388,6 +390,8 @@ impl<T: 'static> EventLoop<T> {
     /// Dispatch all queued messages via `PeekMessageW`
     fn dispatch_peeked_messages(&mut self) {
         let runner = &self.window_target.p.runner_shared;
+        let dispatch_started = Instant::now();
+        let mut dispatched_messages = 0u32;
 
         // We generally want to continue dispatching all pending messages
         // but we also allow dispatching to be interrupted as a means to
@@ -430,6 +434,11 @@ impl<T: 'static> EventLoop<T> {
             }
 
             if runner.interrupt_msg_dispatch.get() {
+                break;
+            }
+
+            dispatched_messages += 1;
+            if dispatched_messages > 0 && dispatch_started.elapsed() >= PEEKED_MESSAGE_DISPATCH_BUDGET {
                 break;
             }
         }
