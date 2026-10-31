@@ -7,6 +7,8 @@ use std::sync::Arc;
 use percent_encoding::percent_decode;
 use x11rb::protocol::xproto::{self, ConnectionExt};
 
+use crate::dpi::PhysicalPosition;
+
 use super::atoms::AtomName::None as DndNone;
 use super::atoms::*;
 use super::{util, CookieResultExt, X11Error, XConnection};
@@ -47,11 +49,20 @@ pub struct Dnd {
     pub source_window: Option<xproto::Window>,
     // Populated by SelectionNotify event handler (triggered by XdndPosition event handler)
     pub result: Option<Result<Vec<PathBuf>, DndDataParseError>>,
+    // Populated by XdndPosition event handler: where the pointer stands, in window pixels
+    pub position: PhysicalPosition<f64>,
 }
 
 impl Dnd {
     pub fn new(xconn: Arc<XConnection>) -> Result<Self, X11Error> {
-        Ok(Dnd { xconn, version: None, type_list: None, source_window: None, result: None })
+        Ok(Dnd {
+            xconn,
+            version: None,
+            type_list: None,
+            source_window: None,
+            result: None,
+            position: PhysicalPosition::new(0.0, 0.0),
+        })
     }
 
     pub fn reset(&mut self) {

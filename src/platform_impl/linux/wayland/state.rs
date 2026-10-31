@@ -12,6 +12,7 @@ use sctk::reexports::client::protocol::wl_surface::WlSurface;
 use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 
 use sctk::compositor::{CompositorHandler, CompositorState};
+use sctk::data_device_manager::DataDeviceManagerState;
 use sctk::output::{OutputHandler, OutputState};
 use sctk::registry::{ProvidesRegistryState, RegistryState};
 use sctk::seat::pointer::ThemedPointer;
@@ -26,7 +27,7 @@ use sctk::subcompositor::SubcompositorState;
 use crate::platform_impl::wayland::event_loop::sink::EventSink;
 use crate::platform_impl::wayland::output::MonitorHandle;
 use crate::platform_impl::wayland::seat::{
-    PointerConstraintsState, RelativePointerState, TextInputState, WinitPointerData,
+    DragState, PointerConstraintsState, RelativePointerState, TextInputState, WinitPointerData,
     WinitPointerDataExt, WinitSeatState,
 };
 use crate::platform_impl::wayland::types::kwin_blur::KWinBlurManager;
@@ -83,6 +84,12 @@ pub struct WinitState {
 
     /// The state of the text input on the client.
     pub text_input_state: Option<TextInputState>,
+
+    /// The manager of the seats' data devices.
+    pub data_device_manager: Option<DataDeviceManagerState>,
+
+    /// The file drag standing over a window.
+    pub drag: Option<DragState>,
 
     /// Observed monitors.
     pub monitors: Arc<Mutex<Vec<MonitorHandle>>>,
@@ -180,6 +187,8 @@ impl WinitState {
 
             seats,
             text_input_state: TextInputState::new(globals, queue_handle).ok(),
+            data_device_manager: DataDeviceManagerState::bind(globals, queue_handle).ok(),
+            drag: None,
 
             relative_pointer: RelativePointerState::new(globals, queue_handle).ok(),
             pointer_constraints: PointerConstraintsState::new(globals, queue_handle)
