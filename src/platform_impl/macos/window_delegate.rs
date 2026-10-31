@@ -9,7 +9,7 @@ use core_graphics::display::{CGDisplay, CGPoint};
 use monitor::VideoModeHandle;
 use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::{AnyObject, ProtocolObject};
-use objc2::{declare_class, msg_send_id, mutability, sel, ClassType, DeclaredClass};
+use objc2::{declare_class, msg_send, msg_send_id, mutability, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
     NSAppKitVersionNumber, NSAppKitVersionNumber10_12, NSAppearance, NSAppearanceCustomization,
     NSAppearanceNameAqua, NSApplication, NSApplicationPresentationOptions, NSBackingStoreType,
@@ -22,7 +22,7 @@ use objc2_foundation::{
     ns_string, CGFloat, MainThreadMarker, NSArray, NSCopying, NSDictionary, NSKeyValueChangeKey,
     NSKeyValueChangeNewKey, NSKeyValueChangeOldKey, NSKeyValueObservingOptions, NSObject,
     NSObjectNSDelayedPerforming, NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint,
-    NSRect, NSSize, NSString,
+    NSRect, NSSize, NSString, NSUInteger,
 };
 use tracing::{trace, warn};
 
@@ -379,12 +379,36 @@ declare_class!(
             };
             let filenames: Retained<NSArray<NSString>> = unsafe { Retained::cast(filenames) };
 
-            filenames.into_iter().for_each(|file| {
-                let path = PathBuf::from(file.to_string());
-                self.queue_event(WindowEvent::HoveredFile(path));
-            });
+            let paths: Vec<PathBuf> =
+                filenames.into_iter().map(|file| PathBuf::from(file.to_string())).collect();
+            for path in &paths {
+                self.queue_event(WindowEvent::HoveredFile(path.clone()));
+            }
+            let position = self.dragging_position(sender);
+            self.queue_event(WindowEvent::DragEntered { paths, position });
 
             true
+        }
+
+        /// Invoked periodically while the dragged image is inside the destination
+        #[method(wantsPeriodicDraggingUpdates)]
+        fn wants_periodic_dragging_updates(&self) -> bool {
+            false
+        }
+
+        /// Invoked when the dragged image moves inside the destination
+        #[method(draggingUpdated:)]
+        fn dragging_updated(&self, sender: &NSObject) -> NSUInteger {
+            trace_scope!("draggingUpdated:");
+
+            let pb: Retained<NSPasteboard> = unsafe { msg_send_id![sender, draggingPasteboard] };
+            if pb.propertyListForType(unsafe { NSFilenamesPboardType }).is_none() {
+                return 0;
+            }
+            let position = self.dragging_position(sender);
+            self.queue_event(WindowEvent::DragMoved { position });
+            // `NSDragOperationCopy`, what `draggingEntered:` answers with its `true`.
+            1
         }
 
         /// Invoked when the image is released
@@ -408,10 +432,13 @@ declare_class!(
             };
             let filenames: Retained<NSArray<NSString>> = unsafe { Retained::cast(filenames) };
 
-            filenames.into_iter().for_each(|file| {
-                let path = PathBuf::from(file.to_string());
-                self.queue_event(WindowEvent::DroppedFile(path));
-            });
+            let paths: Vec<PathBuf> =
+                filenames.into_iter().map(|file| PathBuf::from(file.to_string())).collect();
+            for path in &paths {
+                self.queue_event(WindowEvent::DroppedFile(path.clone()));
+            }
+            let position = self.dragging_position(sender);
+            self.queue_event(WindowEvent::DragDropped { paths, position });
 
             true
         }
@@ -427,6 +454,7 @@ declare_class!(
         fn dragging_exited(&self, _sender: Option<&NSObject>) {
             trace_scope!("draggingExited:");
             self.queue_event(WindowEvent::HoveredFileCancelled);
+            self.queue_event(WindowEvent::DragLeft { position: None });
         }
     }
 
@@ -818,6 +846,13 @@ impl WindowDelegate {
 
     pub(crate) fn queue_event(&self, event: WindowEvent) {
         self.ivars().app_delegate.maybe_queue_window_event(self.window().id(), event);
+    }
+
+    /// Where the drag `sender` stands, in physical pixels of the content view.
+    fn dragging_position(&self, sender: &NSObject) -> PhysicalPosition<f64> {
+        let location: NSPoint = unsafe { msg_send![sender, draggingLocation] };
+        let location = self.view().convertPoint_fromView(location, None);
+        LogicalPosition::new(location.x as f64, location.y as f64).to_physical(self.scale_factor())
     }
 
     fn handle_scale_factor_changed(&self, scale_factor: CGFloat) {

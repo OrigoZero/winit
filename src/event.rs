@@ -191,6 +191,48 @@ pub enum WindowEvent {
     /// hovered.
     HoveredFileCancelled,
 
+    /// A drag carrying files has entered the window.
+    ///
+    /// `paths` holds every dragged file and `position` is where the pointer stands, in the
+    /// window's physical pixels.
+    ///
+    /// ## Platform-specific
+    ///
+    /// - **iOS / Android / Web / Orbital:** Unsupported.
+    DragEntered { paths: Vec<PathBuf>, position: PhysicalPosition<f64> },
+
+    /// A drag carrying files has moved inside the window.
+    ///
+    /// The pointer motion of a system drag belongs to the drag, so [`CursorMoved`] stays silent
+    /// while it lasts and this event carries the position in its place.
+    ///
+    /// ## Platform-specific
+    ///
+    /// - **iOS / Android / Web / Orbital:** Unsupported.
+    ///
+    /// [`CursorMoved`]: Self::CursorMoved
+    DragMoved { position: PhysicalPosition<f64> },
+
+    /// The files of a drag have been dropped on the window.
+    ///
+    /// `paths` holds every dropped file and `position` is where the drop landed, in the window's
+    /// physical pixels.
+    ///
+    /// ## Platform-specific
+    ///
+    /// - **iOS / Android / Web / Orbital:** Unsupported.
+    DragDropped { paths: Vec<PathBuf>, position: PhysicalPosition<f64> },
+
+    /// A drag carrying files has left the window, or was cancelled over it.
+    ///
+    /// `position` is where it left, on a platform that states one.
+    ///
+    /// ## Platform-specific
+    ///
+    /// - **iOS / Android / Web / Orbital:** Unsupported.
+    /// - **X11 / Wayland / Windows / macOS:** `position` is `None`.
+    DragLeft { position: Option<PhysicalPosition<f64>> },
+
     /// The window gained or lost focus.
     ///
     /// The parameter is true if the window has gained focus, and false if it has lost focus.
@@ -1046,6 +1088,16 @@ mod tests {
                 with_window_event(DroppedFile("x.txt".into()));
                 with_window_event(HoveredFile("x.txt".into()));
                 with_window_event(HoveredFileCancelled);
+                with_window_event(DragEntered {
+                    paths: vec!["x.txt".into()],
+                    position: PhysicalPosition::new(1.0, 2.0),
+                });
+                with_window_event(DragMoved { position: PhysicalPosition::new(1.0, 2.0) });
+                with_window_event(DragDropped {
+                    paths: vec!["x.txt".into()],
+                    position: PhysicalPosition::new(1.0, 2.0),
+                });
+                with_window_event(DragLeft { position: None });
                 with_window_event(Ime(Enabled));
                 with_window_event(CursorMoved { device_id: did, position: (0, 0).into() });
                 with_window_event(ModifiersChanged(event::Modifiers::default()));

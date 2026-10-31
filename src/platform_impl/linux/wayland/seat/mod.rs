@@ -5,6 +5,7 @@ use std::sync::Arc;
 use ahash::AHashMap;
 use tracing::warn;
 
+use sctk::data_device_manager::data_device::DataDevice;
 use sctk::reexports::client::backend::ObjectId;
 use sctk::reexports::client::protocol::wl_seat::WlSeat;
 use sctk::reexports::client::protocol::wl_touch::WlTouch;
@@ -19,11 +20,13 @@ use crate::event::WindowEvent;
 use crate::keyboard::ModifiersState;
 use crate::platform_impl::wayland::state::WinitState;
 
+mod drag;
 mod keyboard;
 mod pointer;
 mod text_input;
 mod touch;
 
+pub use drag::DragState;
 pub use pointer::relative_pointer::RelativePointerState;
 pub use pointer::{PointerConstraintsState, WinitPointerData, WinitPointerDataExt};
 pub use text_input::{TextInputState, ZwpTextInputV3Ext};
@@ -45,6 +48,9 @@ pub struct WinitSeatState {
 
     /// The text input bound on the seat.
     text_input: Option<Arc<ZwpTextInputV3>>,
+
+    /// The data device file drags arrive through.
+    data_device: Option<DataDevice>,
 
     /// The relative pointer bound on the seat.
     relative_pointer: Option<ZwpRelativePointerV1>,
@@ -84,6 +90,13 @@ impl SeatHandler for WinitState {
                 return;
             },
         };
+
+        if seat_state.data_device.is_none() {
+            seat_state.data_device = self
+                .data_device_manager
+                .as_ref()
+                .map(|manager| manager.get_data_device(queue_handle, &seat));
+        }
 
         match capability {
             SeatCapability::Touch if seat_state.touch.is_none() => {
