@@ -628,6 +628,14 @@ impl Window {
     #[inline]
     pub fn focus_window(&self) {}
 
+    /// Hand the compositor `token` to activate this window with.
+    pub fn activate_with_token(&self, token: crate::window::ActivationToken) {
+        match self.xdg_activation.as_ref() {
+            Some(xdg_activation) => xdg_activation.activate(token.token, self.surface()),
+            None => warn!("`activate_with_token` isn't supported"),
+        }
+    }
+
     #[inline]
     pub fn surface(&self) -> &WlSurface {
         self.window.wl_surface()

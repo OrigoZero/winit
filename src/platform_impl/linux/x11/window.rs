@@ -1753,6 +1753,13 @@ impl UnownedWindow {
     #[inline]
     pub fn set_ime_purpose(&self, _purpose: ImePurpose) {}
 
+    /// Focus the window; an X11 window manager takes no activation token
+    /// from a client.
+    #[inline]
+    pub fn activate_with_token(&self, _token: crate::window::ActivationToken) {
+        self.focus_window();
+    }
+
     #[inline]
     pub fn focus_window(&self) {
         let atoms = self.xconn.atoms();
