@@ -14,6 +14,7 @@ use sctk::reexports::client::{Connection, Proxy, QueueHandle};
 use sctk::compositor::{CompositorHandler, CompositorState};
 use sctk::data_device_manager::DataDeviceManagerState;
 use sctk::output::{OutputHandler, OutputState};
+use sctk::reexports::csd_frame::WindowState as XdgWindowState;
 use sctk::registry::{ProvidesRegistryState, RegistryState};
 use sctk::seat::pointer::ThemedPointer;
 use sctk::seat::SeatState;
@@ -292,14 +293,20 @@ impl WindowHandler for WinitState {
         };
 
         // Populate the configure to the window.
-        self.window_compositor_updates[pos].resized |= self
+        let suspended = configure.state.contains(XdgWindowState::SUSPENDED);
+        let mut window = self
             .windows
             .get_mut()
             .get_mut(&window_id)
             .expect("got configure for dead window.")
             .lock()
-            .unwrap()
-            .configure(configure, &self.shm, &self.subcompositor_state);
+            .unwrap();
+        let was_suspended = window.is_suspended();
+        self.window_compositor_updates[pos].resized |=
+            window.configure(configure, &self.shm, &self.subcompositor_state);
+        drop(window);
+
+        self.window_compositor_updates[pos].note_suspended(was_suspended, suspended);
 
         // NOTE: configure demands wl_surface::commit, however winit doesn't commit on behalf of the
         // users, since it can break a lot of things, thus it'll ask users to redraw instead.
@@ -427,11 +434,61 @@ pub struct WindowCompositorUpdate {
 
     /// Close the window.
     pub close_window: bool,
+
+    /// The window became occluded (`Some(true)`) or visible again (`Some(false)`).
+    pub occluded: Option<bool>,
 }
 
 impl WindowCompositorUpdate {
     fn new(window_id: WindowId) -> Self {
-        Self { window_id, resized: false, scale_changed: false, close_window: false }
+        Self {
+            window_id,
+            resized: false,
+            scale_changed: false,
+            close_window: false,
+            occluded: None,
+        }
+    }
+
+    /// Record the suspended state a configure states for the window, against the one the
+    /// configure before it stated. The compositor suspends a toplevel it shows nowhere (one that
+    /// is minimized, on another workspace, or covered by other windows), which is what
+    /// `WindowEvent::Occluded` reports.
+    fn note_suspended(&mut self, was_suspended: bool, suspended: bool) {
+        if was_suspended != suspended {
+            self.occluded = Some(suspended);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn update() -> WindowCompositorUpdate {
+        WindowCompositorUpdate::new(WindowId::dummy())
+    }
+
+    #[test]
+    fn a_configure_that_suspends_the_window_reports_it_occluded() {
+        let mut suspended = update();
+        suspended.note_suspended(false, true);
+        assert_eq!(suspended.occluded, Some(true));
+
+        let mut resumed = update();
+        resumed.note_suspended(true, false);
+        assert_eq!(resumed.occluded, Some(false));
+    }
+
+    #[test]
+    fn a_configure_that_keeps_the_suspended_state_reports_nothing() {
+        let mut shown = update();
+        shown.note_suspended(false, false);
+        assert_eq!(shown.occluded, None);
+
+        let mut hidden = update();
+        hidden.note_suspended(true, true);
+        assert_eq!(hidden.occluded, None);
     }
 }
 
