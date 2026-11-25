@@ -460,7 +460,11 @@ pub enum WindowEvent {
     /// ### Others
     ///
     /// - **Web:** Doesn't take into account CSS [`border`], [`padding`], or [`transform`].
-    /// - **Android / Wayland / Windows / Orbital:** Unsupported.
+    /// - **Wayland:** Reported from the `suspended` state of the `xdg_toplevel` (`xdg_wm_base`
+    ///   version 6), which a compositor states for a window it shows nowhere: one that is
+    ///   minimized, on another workspace, or fully covered by other windows, as the compositor
+    ///   decides.
+    /// - **Android / Windows / Orbital:** Unsupported.
     ///
     /// [`border`]: https://developer.mozilla.org/en-US/docs/Web/CSS/border
     /// [`padding`]: https://developer.mozilla.org/en-US/docs/Web/CSS/padding

@@ -423,6 +423,15 @@ impl WindowState {
         }
     }
 
+    /// Whether the last configure the compositor sent states the window suspended: it is shown
+    /// nowhere, and the compositor sends it no frame callbacks.
+    #[inline]
+    pub fn is_suspended(&self) -> bool {
+        self.last_configure
+            .as_ref()
+            .is_some_and(|configure| configure.state.contains(XdgWindowState::SUSPENDED))
+    }
+
     #[inline]
     fn is_stateless(configure: &WindowConfigure) -> bool {
         !(configure.is_maximized() || configure.is_fullscreen() || configure.is_tiled())
